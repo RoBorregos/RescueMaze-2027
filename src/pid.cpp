@@ -28,7 +28,7 @@ void PID::reset(){
     first_call = true;
 }
 
-// Returns the PID output after checking if it passes the filter
+// Clips value to [-output_limit, output_limit]
 float PID::limit(float value) {
     if (value > output_limit){
         return output_limit;
