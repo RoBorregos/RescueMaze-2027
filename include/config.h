@@ -72,6 +72,10 @@ namespace Motion {
     //TODO -> tune
     constexpr float kCruiseSpeedCmS = 20.0f;
     constexpr float kTurnSpeedCmS = 15.0f;
+    constexpr float kMinSpeedCmS = 5.0f; // Minimum speed to avoid stalling
+    constexpr float kDecelGain = 0.5f; // Speed = gain * remaining cm, half the remaining distance per second
+    constexpr float kDistanceToleranceCm = 1.0f; // Tolerance for distance control
+    constexpr uint32_t kMoveTimeoutMs = 5000; // Abort a movement that takes too long
 }
 
 // Missing:
