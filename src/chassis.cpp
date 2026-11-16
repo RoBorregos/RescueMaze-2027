@@ -6,6 +6,8 @@ static void IRAM_ATTR encoderIsr(void* arg) {
 }
 
 void Chassis::begin() {
+    
+    stopped = false;
     for (uint8_t i = 0; i < MotorID::kCount; i++) {
 
         motors[i].initialize(
@@ -40,6 +42,7 @@ void Chassis::update(float dt) {
 }
 
 void Chassis::setTargetWheelSpeeds(float left_cm_s, float right_cm_s) {
+    stopped = false;
     target_speeds[MotorID::kFrontLeft] = left_cm_s;
     target_speeds[MotorID::kBackLeft] = left_cm_s;
     target_speeds[MotorID::kFrontRight] = right_cm_s;
@@ -47,6 +50,7 @@ void Chassis::setTargetWheelSpeeds(float left_cm_s, float right_cm_s) {
 }
 
 void Chassis::stop() {
+    stopped = true;
     for (uint8_t i = 0; i < MotorID::kCount; i++) {
         target_speeds[i] = 0.0f;
         pids[i].reset();
