@@ -10,8 +10,8 @@ class Chassis {
         Motor motors[MotorID::kCount];
         PID pids[MotorID::kCount];
         float target_speeds[MotorID::kCount]; //Target speeds of each wheel in cm/s
-        float distances[MotorID::kCount]; //Distance traveled by each wheel in cm
-        
+        bool stopped; //True if the chassis is stopped, false otherwise
+
     public:
         void begin();
         void update(float dt); // Runs the 4 wheel PIDs, call every 10 ms

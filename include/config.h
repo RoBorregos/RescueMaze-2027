@@ -15,7 +15,7 @@ constexpr uint8_t kBackRight = 3;
 constexpr uint8_t kCount = 4;
 }
 
-//34, 35, 36 y 39 -> Input pins
+//34, 35, 36 and 39 -> Input pins
 //TODO -> Assumes a driver with a 2 direction pins
 namespace Pins{
     
@@ -27,7 +27,6 @@ namespace Pins{
     //TODO single-channel encoders 
     constexpr uint8_t kEncoderA[MotorID::kCount] = {34, 35, 36, 39};
 
-    //I2C Slave bus
     constexpr uint8_t kI2cSda = 21;
     constexpr uint8_t kI2cScl = 22;
     constexpr bool kMotorInverted[MotorID::kCount] = {false, true, false, true};
