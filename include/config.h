@@ -30,6 +30,7 @@ namespace Pins{
     //I2C Slave bus
     constexpr uint8_t kI2cSda = 21;
     constexpr uint8_t kI2cScl = 22;
+    constexpr bool kMotorInverted[MotorID::kCount] = {false, true, false, true};
 }
 
 namespace Comms{
