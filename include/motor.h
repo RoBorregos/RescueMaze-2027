@@ -1,5 +1,5 @@
-#ifndef MOTOR_ENCODER_H
-#define MOTOR_ENCODER_H
+#ifndef MOTOR_H
+#define MOTOR_H
 
 #include <stdint.h>
 
@@ -7,12 +7,12 @@ class Motor {
     private:
         uint8_t in1_pin;
         uint8_t in2_pin; 
-        uint8_t pwm_pin; //Alimenation
+        uint8_t pwm_pin;
         bool inverted; //True if the motor is inverted
         float cm_per_tick; //Cm traveled per encoder tick
 
-        int power; // Last power sent, -255 to 255
-        volatile int32_t ticks; //written by the interrput , so it is volatile
+        volatile int power; // Last power sent, -255 to 255
+        volatile int32_t ticks; //written by the interrupt , so it is volatile
         int32_t last_ticks; //ticks at the previous update()
         float speed_cm_s; // Actual speed/cm/s 
 

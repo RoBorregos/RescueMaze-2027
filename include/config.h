@@ -15,7 +15,7 @@ constexpr uint8_t kBackRight = 3;
 constexpr uint8_t kCount = 4;
 }
 
-//34, 35, 36 y 39 --> Input pins
+//34, 35, 36 y 39 -> Input pins
 //TODO -> Assumes a driver with a 2 direction pins
 namespace Pins{
     
@@ -33,12 +33,12 @@ namespace Pins{
 }
 
 namespace Comms{
-    constexpr uint8_t kI2cSlaveAddres = 0x12; //TODO Replace with real address
+    constexpr uint8_t kI2cSlaveAddress = 0x12; //TODO Replace with real address
 }
 
 namespace Geometry {
     constexpr float kPi = 3.14159265f;
-    constexpr float kWheelDiameter = 7.0f; //TODO Replace with real diameter in cm
+    constexpr float kWheelDiameterCm = 7.0f; //TODO Replace with real diameter in cm
     constexpr float kTrackWidthCm = 15.0f; //TODO Replace with real track width in cm
 
     //Encoder readings per motor revolution
@@ -51,20 +51,20 @@ namespace Geometry {
     constexpr float kTicksPerWheelRev = kEncoderCountsPerMotorRev * kGearRatio;
 
     //Cm traveled per encoder tick
-    constexpr float kCmPerTick = (kPi * kWheelDiameter) / kTicksPerWheelRev;
+    constexpr float kCmPerTick = (kPi * kWheelDiameterCm) / kTicksPerWheelRev;
 
     constexpr float kTileSizeCm = 28.0f;  // Rescue Maze 2027 rules
 }
 
 namespace Control {
     
-    //Calculate PID and fix errors every 10ms, 10,000 times per second, 100Hz
+    //Calculate PID and fix errors every 10ms, 100 times per second, 100Hz
     constexpr uint32_t kPeriodMs = 10; // fixed control loop period
     constexpr float kPwmMax = 255.0f; // 8-bit PWM
 
     //TODO -> Replace with real values
     constexpr float kWheelKp = 2.0f;
-    constexpr float kWheelKi = 10.f;
+    constexpr float kWheelKi = 10.0f;
     constexpr float kWheelKd = 0.0f;
 }
 
