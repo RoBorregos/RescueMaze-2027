@@ -10,7 +10,7 @@ PID::PID() {
 
 PID::PID(float kp_, float ki_, float kd_, float output_limit_) {
     kp = kp_;
-    ki = ki_;  
+    ki = ki_;
     kd = kd_;
     output_limit = output_limit_;
     reset();

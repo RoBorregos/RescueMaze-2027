@@ -1,34 +1,48 @@
 #include "chassis.h"
+#include "config.h"
 #include <Arduino.h>
 
-static void IRAM_ATTR encoderIsr(void* arg) {
-    static_cast<Motor*>(arg)->countTick();
-}
+// The interrupt can not call a class method directly, so each motor gets a
+// small function that forwards the encoder edge to its countTick().
+static Motor* isr_motors[MotorID::kCount];
+static void encoderIsr0() { isr_motors[0]->countTick(); }
+static void encoderIsr1() { isr_motors[1]->countTick(); }
+static void encoderIsr2() { isr_motors[2]->countTick(); }
+static void encoderIsr3() { isr_motors[3]->countTick(); }
+static void (*const kEncoderIsr[MotorID::kCount])() = {
+    encoderIsr0, encoderIsr1, encoderIsr2, encoderIsr3
+};
 
 void Chassis::begin() {
-    
+
+    // PWM resolution is global
+    analogWriteResolution(Control::kPwmResolutionBits);
+
     stopped = false;
     for (uint8_t i = 0; i < MotorID::kCount; i++) {
 
         motors[i].initialize(
-            Pins::kMotorIn1[i], 
-            Pins::kMotorIn2[i], 
-            Pins::kMotorPwm[i], 
-            Pins::kMotorInverted[i], 
+            Pins::kMotorIn1[i],
+            Pins::kMotorIn2[i],
+            Pins::kMotorPwm[i],
+            Pins::kEncoderC1[i],
+            Pins::kEncoderC2[i],
+            Pins::kMotorInverted[i],
+            Pins::kEncoderInverted[i],
             Geometry::kCmPerTick
         );
 
         pids[i] = PID(
-            Control::kWheelKp, 
-            Control::kWheelKi, 
-            Control::kWheelKd, 
+            Control::kWheelKp,
+            Control::kWheelKi,
+            Control::kWheelKd,
             Control::kPwmMax
         );
 
         target_speeds[i] = 0.0f;
 
-        pinMode(Pins::kEncoderA[i], INPUT); // GPIO 34, 35, 36 and 39 have no internal pullup. Set encoder pin as input
-        attachInterruptArg(Pins::kEncoderA[i], encoderIsr, &motors[i], RISING);
+        isr_motors[i] = &motors[i];
+        attachInterrupt(digitalPinToInterrupt(Pins::kEncoderC1[i]), kEncoderIsr[i], CHANGE);
     }
 }
 

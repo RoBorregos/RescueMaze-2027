@@ -10,7 +10,7 @@ class PID {
         //Output is always between [-output_limit, output_limit]
         float output_limit;
 
-        
+
         float integral;
         float last_measurement;
         bool first_call; //True if there is no last_measurement yet

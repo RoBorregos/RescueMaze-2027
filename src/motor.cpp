@@ -1,11 +1,17 @@
 #include "motor.h"
+#include "config.h"
 #include <Arduino.h>
 
-void Motor::initialize(uint8_t in1_pin_, uint8_t in2_pin_, uint8_t pwm_pin_, bool inverted_, float cm_per_tick_) {
+void Motor::initialize(uint8_t in1_pin_, uint8_t in2_pin_, uint8_t pwm_pin_,
+                       uint8_t enc_c1_pin_, uint8_t enc_c2_pin_,
+                       bool motor_inverted_, bool encoder_inverted_, float cm_per_tick_) {
     in1_pin = in1_pin_;
     in2_pin = in2_pin_;
     pwm_pin = pwm_pin_;
-    inverted = inverted_;
+    enc_c1_pin = enc_c1_pin_;
+    enc_c2_pin = enc_c2_pin_;
+    motor_inverted = motor_inverted_;
+    encoder_inverted = encoder_inverted_;
     cm_per_tick = cm_per_tick_;
 
     power = 0;
@@ -16,14 +22,16 @@ void Motor::initialize(uint8_t in1_pin_, uint8_t in2_pin_, uint8_t pwm_pin_, boo
     // Set pin modes
     pinMode(in1_pin, OUTPUT);
     pinMode(in2_pin, OUTPUT);
-    ledcAttach(pwm_pin, 20000, 8); // Attach PWM to the pin with 20kHz frequency and 8-bit resolution -> Stop the buzzing
-    brake(); // Ensure the motor is stopped initially
+    pinMode(enc_c1_pin, INPUT);
+    pinMode(enc_c2_pin, INPUT);
+    analogWriteFrequency(pwm_pin, Control::kPwmFrequencyHz);  // Stop the buzzing
+    brake();  // Ensure the motor is stopped initially
 }
 
 void Motor::setPower(int power_) {
     // Clip power to [-255, 255]
     power = constrain(power_, -255, 255);
-    int actual_power = inverted ? -power : power;
+    int actual_power = motor_inverted ? -power : power;
 
     if (actual_power > 0) {
         digitalWrite(in1_pin, HIGH);
@@ -36,24 +44,30 @@ void Motor::setPower(int power_) {
         digitalWrite(in2_pin, LOW);
     }
 
-    ledcWrite(pwm_pin, abs(actual_power));
+    analogWrite(pwm_pin, abs(actual_power));
 }
 
-void IRAM_ATTR Motor::countTick() {
-    if (power > 0) {
+// Runs on every edge of channel C1. Channel C2 tells the direction:
+// equal levels -> one direction, different levels -> the other.
+void Motor::countTick() {
+    if (digitalRead(enc_c1_pin) == digitalRead(enc_c2_pin)) {
         ticks++;
-    } else if (power < 0) {
+    } else {
         ticks--;
     }
+}
+
+int32_t Motor::readTicks() const {
+    noInterrupts();
+    int32_t current_ticks = ticks;
+    interrupts();
+    return encoder_inverted ? -current_ticks : current_ticks;
 }
 
 void Motor::update(float dt) {
     if (dt <= 0.0f) return;
 
-    noInterrupts();
-    int32_t current_ticks = ticks;
-    interrupts();
-
+    int32_t current_ticks = readTicks();
     int32_t delta_ticks = current_ticks - last_ticks;
     last_ticks = current_ticks;
     float raw_speed = (delta_ticks * cm_per_tick) / dt;
@@ -63,19 +77,14 @@ void Motor::update(float dt) {
 }
 
 float Motor::getDistance() const {
-    
-    noInterrupts();
-    int32_t current_ticks = ticks;
-    interrupts();
-
-    return current_ticks * cm_per_tick;
+    return readTicks() * cm_per_tick;
 }
 
-// TODO: braking behavior depends on the driver model.
+// TB6612FNG: both direction pins HIGH = brake
 void Motor::brake() {
     digitalWrite(in1_pin, HIGH);
     digitalWrite(in2_pin, HIGH);
-    ledcWrite(pwm_pin, 0);
+    analogWrite(pwm_pin, 0);
     power = 0;
 }
 
