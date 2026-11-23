@@ -45,8 +45,8 @@ constexpr uint32_t kUsbBaudRate = 115200;  // Test output over USB
 
 namespace Geometry {
 constexpr float kPi = 3.14159265f;
-constexpr float kWheelDiameterCm = 7.0f; //Placeholder
-constexpr float kTrackWidthCm = 15.0f; //Placeholder
+constexpr float kWheelDiameterCm = 6.2f;
+constexpr float kTrackWidthCm = 15.0f;
 
 //Pololu 100:1 HPCB
 constexpr float kEncoderTicksPerMotorRev = 12.0f;
@@ -73,6 +73,14 @@ constexpr float kWheelKi = 10.0f;
 constexpr float kWheelKd = 0.0f;
 } 
 
+namespace ImuConfig{
+    constexpr uint8_t kAddress = 0x4A; //I2C address of the BNO085 IMU
+    constexpr uint32_t kReportIntervalUs = 10000; //New heading every 10ms (100Hz)
+
+    // Turning the robot clockwise must make the heading grow. If it decreases, the board is mounted upside down, so set this to true.
+    constexpr bool kHeadingInverted = false;
+}
+
 namespace Motion {
 constexpr float kCruiseSpeedCmS = 20.0f;
 constexpr float kTurnSpeedCmS = 15.0f;
@@ -80,6 +88,16 @@ constexpr float kMinSpeedCmS = 5.0f;
 constexpr float kDecelGain = 3.0f;  // Speed = gain * remaining cm, slows near the goal
 constexpr float kDistanceToleranceCm = 0.5f;
 constexpr uint32_t kMoveTimeoutMs = 5000;
-}  // namespace Motion
+constexpr float kTurnKp = 0.5f;
+constexpr float kTurnKd = 0.02f;
+constexpr float kMinTurnSpeedCmS = 4.0f; //Below this wheels wont move
+constexpr float kTurnToleranceDeg = 1.5f;
+constexpr uint8_t kTurnSettleCycles = 5; //Number of cycles the turn must be within tolerance before it is considered done
+
+//Extra speed per degree of heading error
+constexpr float kHeadingKp = 0.8f;
+constexpr float kHeadingKd = 0.02f;
+constexpr float kMaxHeadingCorrectionCmS = 6.0f; //Extra speed added to the wheels to correct heading error
+}
 
 #endif

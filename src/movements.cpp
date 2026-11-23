@@ -3,12 +3,17 @@
 #include <Arduino.h>
 #include <math.h>
 
-void Movements::begin(Chassis* chassis_) {
+void Movements::begin(Chassis* chassis_,    Imu* imu_) {
     chassis = chassis_;
+    imu = imu_;
+    turn_pid = PID(Motion::kTurnKp, 0.0f, Motion::kTurnKd, Motion::kTurnSpeedCmS);
+    heading_pid = PID(Motion::kHeadingKp, 0.0f, Motion::kHeadingKd, Motion::kMaxHeadingCorrectionCmS);
     type = MoveType::kNone;
     status = MoveStatus::kIdle;
-    target = 0.0f;
+    target_distance_cm = 0.0f;
+    target_heading_deg = imu->getHeading();
     start_ms = 0;
+    settled_cycles = 0;
 }
 
 void Movements::startAdvance(float distance_cm) {
@@ -20,14 +25,13 @@ void Movements::startAdvance(float distance_cm) {
         return;
     }
 
+    //target_heading_deg does not change.
     chassis->resetDistance();
+    heading_pid.reset();
     type = MoveType::kAdvance;
-    target = distance_cm;
+    target_distance_cm = distance_cm;
     start_ms = millis();
     status = MoveStatus::kRunning;
-
-    float speed = (distance_cm > 0) ? Motion::kCruiseSpeedCmS : -Motion::kCruiseSpeedCmS;
-    chassis->setTargetWheelSpeeds(speed, speed);
 }
 
 void Movements::startTurn(float degrees) {
@@ -39,70 +43,77 @@ void Movements::startTurn(float degrees) {
         return;
     }
 
-    chassis->resetDistance();
+    // The new target is the previous TARGET plus the turn. +90 turns the target is exactly 360.
+    target_heading_deg += degrees;
+    turn_pid.reset();
+    settled_cycles = 0;
     type = MoveType::kTurn;
-    target = degrees;
     start_ms = millis();
     status = MoveStatus::kRunning;
-
-    // Clockwise (+): left wheels forward, right wheels backward
-    float speed = Motion::kTurnSpeedCmS;
-    if (degrees > 0) {
-        chassis->setTargetWheelSpeeds(speed, -speed);
-    } else {
-        chassis->setTargetWheelSpeeds(-speed, speed);
-    }
 }
 
-void Movements::update() {
+void Movements::update(float dt) {
     if (status != MoveStatus::kRunning) return;
 
-    // Abort a move that takes too long (stuck robot, bad encoder...)
+    // Abort a move that takes too long (stuck robot, bad sensor...)
     if (millis() - start_ms > Motion::kMoveTimeoutMs) {
-        chassis->stop();
-        status = MoveStatus::kTimeout;
-        type = MoveType::kNone;
+        finish(MoveStatus::kTimeout);
         return;
     }
 
-    float sign = (target > 0.0f) ? 1.0f : -1.0f;  // Direction of the move
-
-    // Each move type fills these 4 values, the rest is shared
-    float remaining = 0.0f;   // How much is left to do (cm of wheel travel)
-    float max_speed = 0.0f;   // Speed limit for this move (cm/s)
-    float left_sign = 0.0f;   // Direction of the left wheels
-    float right_sign = 0.0f;  // Direction of the right wheels
-
+    float heading = imu->getHeading();
     if (type == MoveType::kAdvance) {
-        float distance = (chassis->getLeftDistance() + chassis->getRightDistance()) / 2.0f;
-        remaining = fabs(target) - sign * distance;
-        max_speed = Motion::kCruiseSpeedCmS;
-        left_sign = sign;
-        right_sign = sign;
+        updateAdvance(heading, dt);
     } else if (type == MoveType::kTurn) {
-        // Distance each wheel must travel to turn the requested angle
-        float arc = Geometry::kPi * Geometry::kTrackWidthCm * fabs(target) / 360.0f;
-        // Clockwise turn: left wheels go forward (+), right wheels backward (-)
-        float progress = (chassis->getLeftDistance() - chassis->getRightDistance()) / 2.0f;
-        remaining = arc - sign * progress;
-        max_speed = Motion::kTurnSpeedCmS;
-        left_sign = sign;
-        right_sign = -sign;
-    } else {
-        return;
+        updateTurn(heading, dt);
     }
+}
+
+void Movements::updateAdvance(float heading, float dt) {
+    float sign = (target_distance_cm > 0.0f) ? 1.0f : -1.0f;  // Forward or backward
+    float distance = (chassis->getLeftDistance() + chassis->getRightDistance()) / 2.0f;
+    float remaining = fabs(target_distance_cm) - sign * distance;
 
     if (remaining <= Motion::kDistanceToleranceCm) {
-        chassis->stop();
-        status = MoveStatus::kDone;
-        type = MoveType::kNone;
+        finish(MoveStatus::kDone);
         return;
     }
 
-    // Slow down as the goal gets closer
-    float speed = constrain(Motion::kDecelGain * remaining, Motion::kMinSpeedCmS, max_speed);
-    chassis->setTargetWheelSpeeds(left_sign * speed, right_sign * speed);
+    // Base speed: cruise, slowing down near the goal
+    float speed = sign * constrain(Motion::kDecelGain * remaining, Motion::kMinSpeedCmS, Motion::kCruiseSpeedCmS);
+
+    float correction = heading_pid.calculate_PID(target_heading_deg, heading, dt);
+    chassis->setTargetWheelSpeeds(speed + correction, speed - correction);
 }
+
+void Movements::updateTurn(float heading, float dt){
+    float error = target_heading_deg - heading;
+
+    if (fabs(error) <= Motion::kTurnToleranceDeg) {
+        settled_cycles++;
+        chassis->setTargetWheelSpeeds(0.0f, 0.0f);
+        if (settled_cycles >= Motion::kTurnSettleCycles) {
+            finish(MoveStatus::kDone);
+        }
+        return;
+    }
+    settled_cycles = 0;
+
+    float speed = turn_pid.calculate_PID(target_heading_deg, heading, dt);
+    if (fabs(speed) < Motion::kMinTurnSpeedCmS) {
+        speed = (error > 0.0f) ? Motion::kMinTurnSpeedCmS : -Motion::kMinTurnSpeedCmS;
+    }
+
+    // Clockwise (+): left wheels forward, right wheels backward
+    chassis->setTargetWheelSpeeds(speed, -speed);
+}
+
+void Movements::finish(MoveStatus final_status) {
+    chassis->stop();
+    type = MoveType::kNone;
+    status = final_status;
+}
+
 
 void Movements::cancel() {
     chassis->stop();
@@ -116,4 +127,8 @@ bool Movements::isBusy() const {
 
 MoveStatus Movements::getStatus() const {
     return status;
+}
+
+float Movements::getTargetHeading() const {
+    return target_heading_deg;
 }
