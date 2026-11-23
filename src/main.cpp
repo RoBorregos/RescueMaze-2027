@@ -1,4 +1,5 @@
 #include <Arduino.h>
+#include <stdint.h>
 #include "config.h"
 #include "chassis.h"
 #include "imu.h"
@@ -9,31 +10,20 @@ Chassis g_chassis;
 Imu g_imu;
 Movements g_movements;
 
-// One tile forward, turn right, one tile forward, turn left. Positive degrees = clockwise (right).
-struct Step {
-    bool is_turn;
-    float value;  // cm for advance, degrees for turn
-};
-
-static const Step kSequence[] = {
-    {false, Geometry::kTileSizeCm}, //One tile forward
-    {true, 90.0f}, //Turn right
-    {false, Geometry::kTileSizeCm}, //One tile forward
-    {true, -90.0f}, //Turn left
-    {true, 180.0f}, //Turn around
-};
-
-static const uint8_t kSequenceLength = sizeof(kSequence) / sizeof(kSequence[0]);
-
-static constexpr uint32_t kStartDelayMs = 3000;  // Time to put the robot down after reset
+static constexpr uint32_t kImuWaitMs = 2000;     // Max wait for the first heading at startup
 static constexpr uint32_t kPrintPeriodMs = 100;  // Telemetry over USB, 10 times per second
+
+static uint32_t last_loop_us = 0;
+static uint32_t last_print_ms = 0;
+static MoveStatus last_status = MoveStatus::kIdle;
+static uint8_t step_index = 0;
 
 // Set to true once to spin M1..M4 one by one at startup and identify the wheels.
 static constexpr bool kSpinMotorsAtStart = false;
 
-static uint32_t last_loop_us = 0;
-static uint32_t last_print_ms = 0;
-static uint8_t step_index = 0;
+// Text typed in the serial monitor, until Enter is pressed.
+static char command_buffer[32];
+static uint8_t command_length = 0;
 
 // Spin motor M1 to M4 one at a time, 1 s each. ignoring kMotorInverted. Wheels in the air.
 static void spinMotor(uint8_t i) {
@@ -49,10 +39,18 @@ static void spinMotor(uint8_t i) {
     delay(1000);
 }
 
+static void printHelp() {
+    Serial.println("Commands (type and press Enter):");
+    Serial.println("  a <cm>   advance, negative = backward   e.g. a 28");
+    Serial.println("  t <deg>  turn, + right / - left         e.g. t 90");
+    Serial.println("  p        pause the current move");
+    Serial.println("  r        resume the paused move");
+    Serial.println("  s        stop and cancel the move");
+    Serial.println("  i        print the current state");
+}
+
 static void printTelemetry() {
     Serial.print(millis());
-    Serial.print(",step=");
-    Serial.print(step_index);
     Serial.print(",status=");
     Serial.print(static_cast<int>(g_movements.getStatus()));
     Serial.print(",heading=");
@@ -69,8 +67,90 @@ static void printTelemetry() {
     Serial.println(g_chassis.getRightSpeed());
 }
 
+// Runs one typed line
+static void runCommand(const char* line) {
+    while (*line == ' ') line++;          // Skip spaces at the start
+    char command = line[0];
+    float value = atof(line + 1);         // The number after the letter (0 if none)
+
+    bool is_move = (command == 'a' || command == 't');
+    if (is_move && !g_imu.isReady()) {
+        Serial.println("no heading from the BNO085, cannot move");
+        return;
+    }
+    if (is_move && g_movements.isBusy()) {
+        Serial.println("busy: wait for 'done' or send s");
+        return;
+    }
+
+    switch (command) {
+        case 'a':
+            g_movements.startAdvance(value);
+            Serial.print("advance ");
+            Serial.print(value);
+            Serial.println(" cm");
+            break;
+        case 't':
+            g_movements.startTurn(value);
+            Serial.print("turn ");
+            Serial.print(value);
+            Serial.println(" deg");
+            break;
+        case 'p':
+            Serial.println(g_movements.pause() ? "paused" : "nothing to pause");
+            break;
+        case 'r':
+            Serial.println(g_movements.resume() ? "resumed" : "nothing to resume");
+            break;
+        case 's':
+            g_movements.cancel();
+            Serial.println("stopped");
+            break;
+        case 'i':
+            printTelemetry();
+            break;
+        default:
+            printHelp();
+            break;
+    }
+}
+
+// Collects the characters typed in the serial monitor. Only reads what has already arrived, the control loop keeps 10 ms.
+static void readSerialCommands() {
+    while (Serial.available() > 0) {
+        char c = static_cast<char>(Serial.read());
+        if (c == '\n' || c == '\r') {
+            if (command_length > 0) {
+                command_buffer[command_length] = '\0';
+                runCommand(command_buffer);
+                command_length = 0;
+            }
+        } else if (command_length < sizeof(command_buffer) - 1) {
+            command_buffer[command_length] = c;
+            command_length++;
+        }
+    }
+}
+
+// Prints a line when a move finishes or is aborted.
+static void reportStatusChange() {
+    MoveStatus status = g_movements.getStatus();
+    if (status == last_status) return;
+    if (status == MoveStatus::kDone) {
+        Serial.println("done");
+        printTelemetry();
+    } else if (status == MoveStatus::kTimeout) {
+        Serial.println("timeout: move aborted");
+        printTelemetry();
+    }
+    last_status = status;
+}
+
+
 void setup() {
     Serial.begin(Comms::kUsbBaudRate);
+
+    printHelp();
 
     if(kSpinMotorsAtStart) {
         for (uint8_t i = 0; i < MotorID::kCount; i++) spinMotor(i);
@@ -80,11 +160,13 @@ void setup() {
     if (!g_imu.begin()) {
         Serial.println("IMU failed to initialize");
     }
-    delay(kStartDelayMs);
 
-    while (g_imu.isReady() == false && millis() < kStartDelayMs + 2000) { //Wait for the first heading
+     // Wait for the first heading, so the robot starts with heading 0.
+    uint32_t wait_start_ms = millis();
+    while (!g_imu.isReady() && millis() - wait_start_ms < kImuWaitMs) {
         g_imu.update();
     }
+
     g_movements.begin(&g_chassis, &g_imu); //Connect the Movements class to the Chassis class
 
     Serial.println(g_imu.isReady() ? "start" : "no heading, sequence disabled");
@@ -92,34 +174,22 @@ void setup() {
 }
 
 void loop() {
+    // Fixed period control loop. Nothing in here blocks or waits.
     uint32_t now_us = micros();
-    if (now_us - last_loop_us < Control::kPeriodMs * 1000UL) return; //If the time since the last loop is less than the control period, return early.
+    if (now_us - last_loop_us < Control::kPeriodMs * 1000UL) return;
 
-    float dt = (now_us - last_loop_us) / 1000000.0f; //Time since last loop in seconds
-    last_loop_us = now_us; 
+    float dt = (now_us - last_loop_us) / 1000000.0f;
+    last_loop_us = now_us;
 
-    g_imu.update(); //Read the IMU, update the heading
-    g_chassis.update(dt); //For each wheel, turn ticks to cm/s, update the PID and set the power to the motor
-    g_movements.update(dt); //Checks if the current move is done, if not, checks if it has timed out, if not, checks how much distance is left and sets the target speed for each wheel accordingly.
-    
-    // Start the next step when the previous one is finished. Without a heading, turns could never finish, so nothing starts.
-    if (g_imu.isReady() && !g_movements.isBusy() && step_index < kSequenceLength) {
-        if (g_movements.getStatus() == MoveStatus::kTimeout) {
-            Serial.println("timeout, sequence stopped");
-            step_index = kSequenceLength;
-        } else {
-            const Step& step = kSequence[step_index];
-            if (step.is_turn) {
-                g_movements.startTurn(step.value);
-            } else {
-                g_movements.startAdvance(step.value);
-            }
-            step_index++;
-        }
-    }
+    readSerialCommands();     // 1. Orders typed in the monitor
+    g_imu.update();           // 2. Read the heading
+    g_chassis.update(dt);     // 3. Wheel speed PIDs
+    g_movements.update(dt);   // 4. Advance / turn logic
+    reportStatusChange();     // 5. Say "done" when a move ends
 
-    if (millis() - last_print_ms >= kPrintPeriodMs) {
+    // Telemetry only while something is moving, so the monitor stays readable.
+    if (g_movements.isBusy() && millis() - last_print_ms >= kPrintPeriodMs) {
         last_print_ms = millis();
-        printTelemetry();
+        printTelemetry();   
     }
 }
