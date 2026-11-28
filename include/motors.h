@@ -1,6 +1,5 @@
-#ifndef MOTORS_H
-#define MOTORS_H
-#include "BNO.H"
+#pragma once
+#include "BNO.h"
 #include "EncoderHealth.h"
 #include "PID.h"
 #include "config.h"
@@ -38,30 +37,29 @@ constexpr uint8_t kDown = 2;
 constexpr uint8_t kNone = 0;
 } // namespace rampID
 
+enum class TurnFeedback { kAutomatic, kBnoOnly, kEncodersOnly };
+
 class motors {
 private:
   float targetAngle = 0;
   static constexpr unsigned long delayTime = 350;
   PID myPID[4];
   EncoderHealth encoderHealth_;
-  void checkEncoderHealth();
+  bool checkEncoderHealth();
+  float estimatedHeading_ = 0.0f;
+  float encoderTurnDegrees(const int *startTicks);
   bool floorColorReady_ = false;
   uint32_t lastFloorColorSampleMs_ = 0;
   // vlx
   static constexpr uint8_t kNumVlx = 8;
   static constexpr float maxVlxDistance = MazeConfig::kWallReferenceMaxMm / 10.0f;
   static constexpr uint8_t brakingDis = 5;
-  static constexpr uint8_t kDistanceToWall = 12;
-  static constexpr uint8_t kDistanceToObstacle =
-      kTileLength + 2; // look over a bit more than a tile
+  static constexpr uint16_t kObstacleDistanceMm = kTileLength * 10 + 20;
   // wheels
   static constexpr float kTicsPerTile = kTileLength / Geometry::kCmPerRisingTick;
-  // Pwm constants
-  uint16_t kMinPwmFormard = 70;
-  uint16_t kMaxPwmFormard = 180;
   // Speeds constants
-  static constexpr float kMinSpeedFormard = Control::toWheelPidTicks(Motion::kMinSpeedCmS);
-  static constexpr float kMaxSpeedFormard = Control::toWheelPidTicks(MazeConfig::kTravelSpeedCmS);
+  static constexpr float kMinSpeedForward = Control::toWheelPidTicks(Motion::kMinSpeedCmS);
+  static constexpr float kMaxSpeedForward = Control::toWheelPidTicks(MazeConfig::kTravelSpeedCmS);
   static constexpr uint16_t kSpeedRampUp = 20;
   static constexpr uint16_t kSpeedRampDown = 9;
   // ramp
@@ -70,7 +68,6 @@ private:
   bool slope = false;
   static constexpr float kMinRampOrientation = MazeConfig::kRampAngleDegrees;
   // control Walls
-  static constexpr float minDisToLateralWall = 6;
   float changeAngle = 0;
   static constexpr uint8_t maxChangeAngle = 3;
   // PID movement constants
@@ -95,8 +92,8 @@ private:
   static constexpr char kCheckpointColor = 'C';
   // movement
   bool limitColition = false;
+  bool rampRealignmentPending_ = false;
   // servo
-  float servoPos = 90;
   static constexpr uint16_t servoPosRight = 133;
   static constexpr uint16_t servoPosLeft = 50;
 
@@ -122,9 +119,8 @@ public:
   bool buttonPressed = false;
   uint8_t rampState = rampID::kNone;
   motors(); // constructor
-  // PIDÂ´s--speeds
-  void setupMotors();
-  void PID_speed(float, float, uint16_t);
+  // Motor speed control
+  void setupMotors(bool initializeMazeSensors = true);
   void PID_Wheel(float, int);
   void PID_AllWheels(float);
   void pidEncoders(float, bool);
@@ -138,14 +134,14 @@ public:
   void setleftTraslation();
   void setrightTraslation();
   void stop();
-  void calibrateColors();
-  void victimSequency();
+  void victimSequence();
   // movements
   void ahead();
   void back();
-  void left();
-  void right();
-  void rotate(float);
+  bool left();
+  bool right();
+  bool rotate(float headingDegrees, TurnFeedback feedback = TurnFeedback::kAutomatic);
+  bool rotateByEncoders(float degrees);
   void moveDistance(uint8_t targetDistance, bool);
   void writeServo(uint16_t servoAngle);
   // setups
@@ -157,7 +153,7 @@ public:
   void checkTileColor(bool atEnd = false);
   void limitCrash();
   float nearWall();
-  void passObstacle();
+  bool passObstacle();
   WallReading readWall(uint8_t direction);
   // victims
   void harmedVictim();
@@ -169,17 +165,21 @@ public:
   // gets
   float getCurrentDistanceCm();
   float getAngleOrientation();
-  double getAvergeTics();
+  double getAverageTicks();
   double getTicsSpeed();
   // logic
   void checkpointElection();
   float findNearest(float, const float[], uint8_t, bool);
   float calculateAngularDistance();
   void resetTics();
+  bool hasEncoderFeedback(uint8_t wheel) const {
+    return wheel < MotorID::kCount && !encoderHealth_.failed(wheel);
+  }
   // ramp
   bool rampInFront();
   bool isRamp();
   void ramp();
+  bool isRampRealignmentPending() const { return rampRealignmentPending_; }
   // comunication
   void wait(unsigned long);
   void wifiPrint(String, float);
@@ -188,5 +188,3 @@ public:
   void printSpeeds();
   void printAngle();
 };
-
-#endif

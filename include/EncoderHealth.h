@@ -1,5 +1,4 @@
-#ifndef ENCODER_HEALTH_H
-#define ENCODER_HEALTH_H
+#pragma once
 
 #include "Pins_ID.h"
 #include "config.h"
@@ -49,20 +48,39 @@ public:
 
   bool failed(uint8_t wheel) const { return wheels_[wheel].failed; }
 
+  bool hasLeftFeedback() const {
+    return !failed(MotorID::kFrontLeft) || !failed(MotorID::kBackLeft);
+  }
+
+  bool hasRightFeedback() const {
+    return !failed(MotorID::kFrontRight) || !failed(MotorID::kBackRight);
+  }
+
   bool hasFeedbackOnBothSides() const {
-    return !(failed(MotorID::kFrontLeft) && failed(MotorID::kBackLeft)) &&
-           !(failed(MotorID::kFrontRight) && failed(MotorID::kBackRight));
+    return hasLeftFeedback() && hasRightFeedback();
+  }
+
+  bool hasFeedback() const {
+    return hasLeftFeedback() || hasRightFeedback();
+  }
+
+  template <typename Sample>
+  float leftAverage(const Sample *values) const {
+    return sideAverage(values, MotorID::kFrontLeft, MotorID::kBackLeft);
+  }
+
+  template <typename Sample>
+  float rightAverage(const Sample *values) const {
+    return sideAverage(values, MotorID::kFrontRight, MotorID::kBackRight);
   }
 
   template <typename Sample>
   float average(const Sample *values) const {
-    return (sideAverage(values, MotorID::kFrontLeft, MotorID::kBackLeft) +
-            sideAverage(values, MotorID::kFrontRight, MotorID::kBackRight)) / 2.0f;
+    const int sides = int(hasLeftFeedback()) + int(hasRightFeedback());
+    return sides ? (leftAverage(values) + rightAverage(values)) / sides : 0.0f;
   }
 
   void endMotion() {
     for (Wheel &wheel : wheels_) wheel.watching = false;
   }
 };
-
-#endif

@@ -1,5 +1,4 @@
-#ifndef TCS_H
-#define TCS_H
+#pragma once
 
 #include <stdint.h>
 
@@ -35,8 +34,6 @@ private:
     bool hasProfile = false;
 };
 
-
-// Keep the 2026 navigation-facing API while using the 2027 calibration.
 class TCS {
 public:
     bool init();
@@ -54,5 +51,3 @@ private:
     FloorSample sample_{};
     bool ready_ = false;
 };
-
-#endif

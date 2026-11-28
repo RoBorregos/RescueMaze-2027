@@ -1,5 +1,4 @@
-#ifndef _SingleEMAFilter_h
-#define _SingleEMAFilter_h
+#pragma once
 
 #if defined(ARDUINO) && ARDUINO >= 100
 #include "Arduino.h"
@@ -14,16 +13,14 @@ private:
   T highPassFilter_;
 
 public:
-  SingleEMAFilter<T>(const double alpha);
+  SingleEMAFilter(const double alpha);
   T addValue(const T value);
   T getLowPass();
   T getHighPass();
 };
-#endif
 
-template <typename T> SingleEMAFilter<T>::SingleEMAFilter(const double alpha) {
-  alpha_ = alpha;
-}
+template <typename T> SingleEMAFilter<T>::SingleEMAFilter(const double alpha)
+    : alpha_(alpha), lowPassFilter_{}, highPassFilter_{} {}
 
 template <typename T> T SingleEMAFilter<T>::addValue(const T value) {
   lowPassFilter_ =

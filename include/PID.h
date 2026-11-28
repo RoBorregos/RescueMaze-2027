@@ -1,5 +1,4 @@
-#ifndef PID_H
-#define PID_H
+#pragma once
 
 #include <stdint.h>
 
@@ -19,5 +18,3 @@ public:
     void reset();
     float minimumPeriodMs = 20.0f;
 };
-
-#endif

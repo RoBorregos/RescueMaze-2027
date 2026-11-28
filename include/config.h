@@ -3,6 +3,9 @@
 
 namespace Comms {
 constexpr uint32_t kUsbBaudRate = 115200;
+constexpr uint32_t kI2cClockHz = 100000;
+constexpr uint8_t kOledAddress = 0x3C;
+constexpr uint32_t kButtonDebounceMs = 300;
 }
 
 namespace Startup {
@@ -19,12 +22,11 @@ constexpr float kEncoderTicksPerMotorRev = 22.0f;
 constexpr float kGearRatio = 30.0f;  // Motor revolutions per wheel revolution.
 
 constexpr float kTicksPerWheelRev = kEncoderTicksPerMotorRev * kGearRatio;
-constexpr float kNominalCmPerTick = (kPi * kWheelDiameterCm) / kTicksPerWheelRev;
-constexpr float kDistanceCalibrationScale = 0.4994283f * (28.5f / 30.0f);
-constexpr float kCmPerTick = kNominalCmPerTick * kDistanceCalibrationScale;
-
-// The 2027 firmware counts both edges of channel A; this port counts only rising edges.
-constexpr float kCmPerRisingTick = 2.0f * kCmPerTick;
+// Apply the existing distance correction to the counts from channel A rising edges.
+// Verify the scale against the measured distance of a 30 cm floor test.
+constexpr float kRisingTickDistanceScale = 0.94891377f;
+constexpr float kCmPerRisingTick =
+    (kPi * kWheelDiameterCm / kTicksPerWheelRev) * kRisingTickDistanceScale;
 constexpr float kTileSizeCm = 30.0f;
 }
 
@@ -35,33 +37,55 @@ constexpr uint32_t kNoPulsesMs = 300;
 } // namespace EncoderConfig
 
 namespace Control {
-constexpr uint32_t kPeriodMs = 10;  // Control loop: 100 Hz
-constexpr uint8_t kPwmResolutionBits = 8;
 constexpr float kPwmMax = 255.0f;
 constexpr float kPwmFrequencyHz = 20000.0f;  // High frequency reduces audible motor whine.
 
-// Rescue Maze 2026 wheel PID and speed windows.
+// Wheel PID and speed sampling.
 constexpr uint32_t kWheelPidPeriodMs = 20;
 constexpr uint32_t kEncoderSpeedWindowMs = 40;
 constexpr float toWheelPidTicks(float speedCmS) {
     return speedCmS * (kEncoderSpeedWindowMs / 1000.0f) / Geometry::kCmPerRisingTick;
 }
-constexpr float kTurnPwmStepMax = 10.0f;  // Max PWM change per fresh encoder sample while turning.
 constexpr float kWheelKp = 1.0f;
 constexpr float kWheelKi = 0.0f;
 constexpr float kWheelKd = 1.35f;
+constexpr float kHeadingKp = 0.5f;
+constexpr float kHeadingKi = 0.1f;
+constexpr float kHeadingKd = 0.01f;
+constexpr uint32_t kHeadingPidPeriodMs = 1;
+constexpr float kHeadingCorrectionMax = 17.0f;
+constexpr float kRampUpCorrectionMax = 15.0f;
+constexpr float kRampDownCorrectionMax = 6.0f;
+constexpr int kMinForwardPwm = 70;
+constexpr int kMaxForwardPwm = 180;
+constexpr bool kDebugPid = false;
 }
 
 namespace Motion {
-constexpr float kCruiseSpeedCmS = 20.0f;
 constexpr float kTurnSpeedCmS = 8.0f;
 constexpr float kTurnToleranceDegrees = 0.5f;
-constexpr float kBnoTurnMinPwm = 80.0f;
-constexpr float kBnoTurnMaxPwm = 170.0f;
+constexpr float kEncoderTurnToleranceDegrees = 2.0f;
+// Initial estimates based on BNO measurements on the floor.
+constexpr float kEncoderRightTurnScale = 0.65f;
+constexpr float kEncoderLeftTurnScale = 0.85f;
+constexpr float scaleEncoderTurn(float degrees) {
+    return degrees * (degrees < 0.0f ? kEncoderLeftTurnScale : kEncoderRightTurnScale);
+}
+constexpr int kNoEncoderMinPwm = 55;
+constexpr int kNoEncoderMaxPwm = 100;
+constexpr uint32_t kTurnTimeoutMs = 5000;
+constexpr uint32_t kHalfTurnTimeoutMs = 10000;
+constexpr float kHalfTurnMinDegrees = 175.0f;
+constexpr float kTurnSpeedGain = 0.24f;
+constexpr float kMinTurnSpeedCmS = 2.5f;
+constexpr float kObstacleTurnDegrees = 25.0f;
+constexpr uint8_t kObstacleRetreatCm = Geometry::kTileSizeCm / 5;
+constexpr uint8_t kObstaclePassCm = 3 * Geometry::kTileSizeCm / 10;
+constexpr float kSlopeAngleDegrees = 7.0f;
+constexpr float kStartOnSlopeAngleDegrees = 15.0f;
+constexpr float kCheckpointAngleToleranceDegrees = 10.0f;
 constexpr float kMinSpeedCmS = 5.0f;
 constexpr float kDecelGain = 3.0f;  // Speed = gain * remaining cm, slows near the goal
-constexpr float kDistanceToleranceCm = 0.5f;
-constexpr uint32_t kMoveTimeoutMs = 10000;
 }
 
 namespace MazeConfig {
@@ -81,4 +105,33 @@ constexpr uint16_t kCenterToleranceMm = 5;
 constexpr float kTravelSpeedCmS = 16.0f;
 constexpr float kRampAngleDegrees = 18.0f;
 constexpr bool kUseFloorColor = true;
+constexpr float kLateralClearanceCm = 6.0f;
+constexpr float kRampWallDistanceCm = 15.0f;
+constexpr float kRampFrontDifferenceCm = 2.0f;
+constexpr uint32_t kFloorColorSampleMs = 50;
+constexpr uint32_t kBlackTileRetreatTimeoutMs = 3000;
+constexpr uint32_t kBlueTileWaitMs = 5500;
+}
+
+namespace BnoConfig {
+constexpr uint8_t kAddresses[] = {0x4A, 0x4B};
+constexpr uint32_t kReportFreshnessMs = 250;
+constexpr uint32_t kSetupTimeoutMs = 1000;
+}
+
+namespace VlxConfig {
+constexpr uint16_t kRangePeriodMs = 100;
+constexpr uint32_t kRangeFreshnessMs = 2 * kRangePeriodMs;
+constexpr float kOutOfRangeCm = 819.0f;
+}
+
+namespace KitConfig {
+constexpr uint16_t kLeftReleaseDegrees = 10;
+constexpr uint16_t kCenterDegrees = 90;
+constexpr uint16_t kRightReleaseDegrees = 170;
+constexpr uint16_t kWiggleDegrees = 6;
+constexpr uint32_t kServoSettleMs = 200;
+constexpr uint32_t kWiggleStepMs = 40;
+constexpr uint32_t kVictimSequenceMs = 5100;
+constexpr uint32_t kVictimBlinkMs = 500;
 }

@@ -1,5 +1,4 @@
-#ifndef PINS_ID_H
-#define PINS_ID_H
+#pragma once
 #include <Arduino.h>
 
 namespace MotorID {
@@ -20,7 +19,6 @@ static_assert(MotoFL < kCount && MotoFR < kCount && MotoBL < kCount && MotoBR < 
                  MotoBL != MotoBR,
               "Assign M1-M4 exactly once across MotoFL, MotoFR, MotoBL and MotoBR.");
 
-// Internal wheel slots used by the 2026 control code.
 constexpr uint8_t kBackRight = 3;
 constexpr uint8_t kBackLeft = 2;
 constexpr uint8_t kFrontRight = 1;
@@ -40,7 +38,7 @@ constexpr bool kEncoderInverted[MotorID::kCount] = {true, false, false, false};
 } // namespace MotorPins
 
 namespace Pins {
-// Keep the 2026 motor and PID slots in FL, FR, BL, BR order.
+// Motor and PID slots are ordered FL, FR, BL, BR.
 constexpr uint8_t encoder[MotorID::kCount] = {
     MotorPins::encoder[MotorID::MotoFL], MotorPins::encoder[MotorID::MotoFR],
     MotorPins::encoder[MotorID::MotoBL], MotorPins::encoder[MotorID::MotoBR],
@@ -145,7 +143,7 @@ constexpr uint8_t LB = kNone; // Left side, back
 constexpr uint8_t BL = VLX7;  // Back left: retains the previous rear connector
 constexpr uint8_t BR = kNone; // Back right
 
-// Internal: keep the 2026 sensor slots used by wall detection and movement.
+// Sensor slots used by wall detection and movement.
 constexpr uint8_t frontLeft = 3;
 constexpr uint8_t frontRight = 0;
 constexpr uint8_t rightFront = 4;
@@ -169,7 +167,5 @@ constexpr bool validConnectorMap() {
 }
 static_assert(validConnectorMap(), "Assign each installed VLX a distinct connector VLX1-VLX8.");
 static_assert(FL && FR && RF && LF && BL,
-              "2026 navigation needs FL, FR, RF, LF and BL assigned.");
+              "navigation needs FL, FR, RF, LF and BL assigned.");
 } // namespace vlxID
-
-#endif

@@ -64,6 +64,8 @@ bool VLX::prepareBus() {
 
 bool VLX::begin(uint8_t connector) {
   initialized = false;
+  lastRangeMm_ = 0;
+  distance = VlxConfig::kOutOfRangeCm;
   if (connector < 1 || connector > sizeof(Pins::vlxXshut)) return false;
   const bool hasXshut = connector != Pins::vlxWithoutXshut;
   const uint8_t address = hasXshut ? kFirstAssignedAddress + connector - 1 : kDefaultAddress;
@@ -77,50 +79,43 @@ bool VLX::begin(uint8_t connector) {
   initialized = probeAddress(kDefaultAddress) == 0 &&
                 VLX_.begin(address, false, &Wire) &&
                 VLX_.setMeasurementTimingBudgetMicroSeconds(kTimingBudget) &&
-                VLX_.startRangeContinuous(100);
+                VLX_.startRangeContinuous(VlxConfig::kRangePeriodMs);
   return initialized;
 }
 
 float VLX::getDistance() {
-
-  uint16_t rawRange = VLX_.readRange();
-  uint16_t status = VLX_.readRangeStatus();
-  if (VLX_.timeoutOccurred()) {
-    // preserve previous valid distance if timeout
-    return distance;
-  }
-
-  if (status != 4) {
-    distance = (float)(rawRange) / 10.0f;
-    return distance;
-  } else {
-    rawRange = VLX_.readRange();
-    status = VLX_.readRangeStatus();
-    if (status != 4) {
-      distance = (float)(rawRange) / 10.0f;
-      return distance;
-    }
-  }
-  return 819.0f;
+  uint16_t millimeters;
+  distance = readValidMillimeters(millimeters) ? millimeters / 10.0f : VlxConfig::kOutOfRangeCm;
+  return distance;
 }
 
 void VLX::printDistance() {
-  float printedDistance = getDistance();
-  if (printedDistance != 819.0) {
+  const float centimeters = getDistance();
+  if (centimeters != VlxConfig::kOutOfRangeCm) {
     Serial.print("Distance: ");
-    Serial.print(distance);
-    Serial.println(" mm");
+    Serial.print(centimeters);
+    Serial.println(" cm");
   } else {
-    Serial.println("Out of range.");
+    Serial.println("No valid range available.");
   }
 }
 
-bool VLX::readValidMillimeters(uint16_t &millimeters) {
+bool VLX::readValidMillimeters(uint16_t &millimeters, uint32_t *sampleTimeMs) {
   if (!initialized) return false;
-  const uint16_t sample = VLX_.readRange();
-  if (VLX_.Status != VL53L0X_ERROR_NONE || VLX_.timeoutOccurred() ||
-      VLX_.readRangeStatus() != 0 || sample == 0 || sample == 0xFFFF) return false;
-  millimeters = sample;
+  if (VLX_.isRangeComplete()) {
+    lastRangeMm_ = 0;
+    if (VLX_.Status != VL53L0X_ERROR_NONE) return false;
+    const uint16_t sample = VLX_.readRangeResult();
+    if (VLX_.Status != VL53L0X_ERROR_NONE || VLX_.readRangeStatus() != 0 ||
+        sample == 0 || sample == 0xFFFF) return false;
+    lastRangeMm_ = sample;
+    lastRangeMs_ = millis();
+  }
+  // Reuse the last valid sample between continuous measurements.
+  if (lastRangeMm_ == 0 || millis() - lastRangeMs_ > VlxConfig::kRangeFreshnessMs)
+    return false;
+  millimeters = lastRangeMm_;
+  if (sampleTimeMs) *sampleTimeMs = lastRangeMs_;
   return true;
 }
 

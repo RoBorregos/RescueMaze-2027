@@ -83,7 +83,7 @@ bool FloorSample::usableForCalibration() const {
 bool FloorCalibration::valid() const {
     for (uint8_t i = 0; i < kTileCount; ++i) {
         const FloorSample &candidate = samples[i];
-        // An empty slot retains the reference values from the 2026 code.
+        // An empty slot uses the factory reference for that tile.
         if ((candidate.clear || candidate.red || candidate.green || candidate.blue) &&
             !candidate.usableForCalibration()) return false;
         for (uint8_t j = 0; j < i; ++j) {

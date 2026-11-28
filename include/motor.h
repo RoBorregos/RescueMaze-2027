@@ -1,5 +1,4 @@
-#ifndef MOTOR_H
-#define MOTOR_H
+#pragma once
 #include "Pins_ID.h"
 #include <Arduino.h>
 
@@ -32,4 +31,3 @@ public:
   uint32_t getTotalEncoderTics() const;
   float getTicsSpeed();
 };
-#endif

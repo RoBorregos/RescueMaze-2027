@@ -15,13 +15,13 @@ void setup() {
     pinMode(Pins::checkpointPin, INPUT_PULLDOWN);
   }
   attachInterrupt(digitalPinToInterrupt(Pins::encoder[MotorID::kFrontLeft]),
-                  Interrups::frontLeftEncoder, RISING);
+                  Interrupts::frontLeftEncoder, RISING);
   attachInterrupt(digitalPinToInterrupt(Pins::encoder[MotorID::kFrontRight]),
-                  Interrups::frontRightEncoder, RISING);
+                  Interrupts::frontRightEncoder, RISING);
   attachInterrupt(digitalPinToInterrupt(Pins::encoder[MotorID::kBackLeft]),
-                  Interrups::backLeftEncoder, RISING);
+                  Interrupts::backLeftEncoder, RISING);
   attachInterrupt(digitalPinToInterrupt(Pins::encoder[MotorID::kBackRight]),
-                  Interrups::backRightEncoder, RISING);
+                  Interrupts::backRightEncoder, RISING);
 }
 
 void loop() {}

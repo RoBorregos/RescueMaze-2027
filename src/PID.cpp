@@ -24,7 +24,7 @@ double PID::calculate_PID(float setpoint, float input) {
     const uint32_t elapsed = now - lastUpdateMs;
     if (elapsed == 0 || elapsed < minimumPeriodMs) return 0.0;
 
-    // The 2026 controller uses the sum of the two latest errors for I.
+    // The integral term uses the sum of the two latest errors.
     // Its result is a correction to the previous PWM, with time in ms.
     const float error = setpoint - input;
     const float proportional = kp * error;

@@ -54,7 +54,8 @@ private:
 
 class FrontWallCandidate {
 public:
-  bool observe(uint8_t slot, float wallCm, float encoderCm) {
+  bool observe(uint8_t slot, float wallCm, float encoderCm, uint32_t sampleTimeMs) {
+    if (pending_ && slot == slot_ && sampleTimeMs == sampleTimeMs_) return false;
     const float predictionError = wallCm - wallCm_ + encoderCm - encoderCm_;
     const float tolerance = MazeConfig::kWallReferenceJumpMm / 10.0f;
     const bool confirmed = pending_ && slot == slot_ &&
@@ -62,6 +63,7 @@ public:
     pending_ = true;
     slot_ = slot;
     wallCm_ = wallCm;
+    sampleTimeMs_ = sampleTimeMs;
     encoderCm_ = encoderCm;
     return confirmed;
   }
@@ -71,6 +73,7 @@ public:
 private:
   bool pending_ = false;
   uint8_t slot_ = 0;
+  uint32_t sampleTimeMs_ = 0;
   float wallCm_ = 0.0f;
   float encoderCm_ = 0.0f;
 };

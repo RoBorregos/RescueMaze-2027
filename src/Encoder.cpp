@@ -2,20 +2,20 @@
 #include "motors.h"
 motors robot;
 
-void Interrups::backRightEncoder() {
+void Interrupts::backRightEncoder() {
   robot.motor[MotorID::kBackRight].updateTics();
 }
-void Interrups::backLeftEncoder() {
+void Interrupts::backLeftEncoder() {
   robot.motor[MotorID::kBackLeft].updateTics();
 }
-void Interrups::frontRightEncoder() {
+void Interrupts::frontRightEncoder() {
   robot.motor[MotorID::kFrontRight].updateTics();
 }
-void Interrups::frontLeftEncoder() {
+void Interrupts::frontLeftEncoder() {
   robot.motor[MotorID::kFrontLeft].updateTics();
 }
-void Interrups::lackOfProgress() {
-  if ((millis() - robot.buttonTime) > 300) {
+void Interrupts::lackOfProgress() {
+  if ((millis() - robot.buttonTime) > Comms::kButtonDebounceMs) {
     robot.buttonPressed = !robot.buttonPressed;
     robot.buttonTime = millis();
   }

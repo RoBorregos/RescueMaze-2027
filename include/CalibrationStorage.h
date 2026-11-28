@@ -1,5 +1,4 @@
-#ifndef CALIBRATION_STORAGE_H
-#define CALIBRATION_STORAGE_H
+#pragma once
 
 #include <EEPROM.h>
 #include <stddef.h>
@@ -68,5 +67,3 @@ bool save(int address, uint32_t version, const Profile &profile) {
     return readRecord(destination, version, stored) && stored.checksum == record.checksum;
 }
 }
-
-#endif
